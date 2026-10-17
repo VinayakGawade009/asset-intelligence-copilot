@@ -173,6 +173,24 @@ CREATE TABLE IF NOT EXISTS user_rule_overrides (
     reason VARCHAR,
     created_at TIMESTAMP
 );
+
+-- Chat sessions and message history
+CREATE TABLE IF NOT EXISTS chats (
+    chat_id VARCHAR PRIMARY KEY,
+    user_id VARCHAR NOT NULL,
+    title VARCHAR,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    message_id VARCHAR PRIMARY KEY,
+    chat_id VARCHAR NOT NULL,
+    role VARCHAR NOT NULL,
+    text VARCHAR NOT NULL,
+    response_json VARCHAR,
+    created_at TIMESTAMP
+);
 """
 
 def init_db(conn):

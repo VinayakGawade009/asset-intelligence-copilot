@@ -62,10 +62,19 @@ def get_date_window(
         return (_subtract_years(today, 4), today)
     elif "13 week" in p:
         return (today - timedelta(weeks=13), today)
-    elif p == "2025":
+    if "2025" in p:
         return (date(2025, 1, 1), date(2025, 12, 31))
-    elif p == "2026":
+    elif "2026" in p:
         return (date(2026, 1, 1), today)
     else:
+        # Check for any 4-digit year
+        import re
+        m = re.search(r"\b(19\d\d|20\d\d)\b", p)
+        if m:
+            yr = int(m.group(1))
+            if yr == today.year:
+                return (date(yr, 1, 1), today)
+            elif yr < today.year:
+                return (date(yr, 1, 1), date(yr, 12, 31))
         # Default fallback to 1 year window ending today
         return (_subtract_years(today, 1), today)

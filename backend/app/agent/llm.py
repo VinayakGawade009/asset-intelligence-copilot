@@ -120,11 +120,8 @@ class GemmaClient:
                 created_at,
                 bool(cached),
             ))
-            if len(_LOG_QUEUE) >= 100:
-                # Flush in separate background or inline
-                pass
         
-        if len(_LOG_QUEUE) >= 100:
+        if len(_LOG_QUEUE) >= 100 or role in ["agent_planner", "agent_answer"]:
             _flush_log_queue()
 
     def _call_model_with_backoff(self, model: str, prompt: str, max_retries: int = 4) -> Tuple[str, int, int]:
