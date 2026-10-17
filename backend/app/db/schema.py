@@ -149,6 +149,30 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     created_at TIMESTAMP,
     cached BOOLEAN
 );
+
+-- Maintenance report facts extracted by Gemma
+CREATE TABLE IF NOT EXISTS maintenance_report_facts (
+    maintenance_id VARCHAR PRIMARY KEY,
+    containment_hours DOUBLE,
+    root_cause VARCHAR,
+    action_required BOOLEAN,
+    stated_spill_class VARCHAR,
+    reporting_duty_listed BOOLEAN,
+    evidence_quote VARCHAR,
+    source_file VARCHAR,
+    extracted_by VARCHAR
+);
+
+-- User runtime rule overrides taking priority at specific scope
+CREATE TABLE IF NOT EXISTS user_rule_overrides (
+    override_id VARCHAR PRIMARY KEY,
+    parameter VARCHAR,
+    scope VARCHAR,
+    value DOUBLE,
+    author VARCHAR,
+    reason VARCHAR,
+    created_at TIMESTAMP
+);
 """
 
 def init_db(conn):

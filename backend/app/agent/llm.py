@@ -5,6 +5,7 @@ import time
 import hashlib
 import uuid
 import re
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Type, TypeVar, Optional, Any, Dict, Tuple
@@ -27,6 +28,38 @@ from backend.app.db.schema import init_db
 # Cache directory
 CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "llm_cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+import atexit
+
+# Lock and queue for batch logging to DuckDB
+_LOG_LOCK = threading.Lock()
+_LOG_QUEUE: list = []
+
+def _flush_log_queue():
+    global _LOG_QUEUE
+    with _LOG_LOCK:
+        if not _LOG_QUEUE:
+            return
+        to_insert = list(_LOG_QUEUE)
+        _LOG_QUEUE.clear()
+    
+    try:
+        conn = get_connection(read_only=False)
+        conn.executemany(
+            """
+            INSERT INTO llm_calls (call_id, role, model, prompt_hash, prompt_preview, latency_ms, input_tokens, output_tokens, created_at, cached)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            to_insert,
+        )
+        conn.close()
+    except Exception:
+        pass
+
+def flush_llm_logs():
+    _flush_log_queue()
+
+atexit.register(flush_llm_logs)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -70,33 +103,29 @@ class GemmaClient:
         cached: bool,
     ):
         """Logs LLM call metadata into DuckDB."""
-        try:
-            conn = get_connection(read_only=False)
-            call_id = f"call_{uuid.uuid4().hex[:12]}"
-            prompt_preview = prompt[:150].replace("\n", " ")
-            created_at = datetime.utcnow().isoformat()
+        call_id = f"call_{uuid.uuid4().hex[:12]}"
+        prompt_preview = prompt[:150].replace("\n", " ")
+        created_at = datetime.utcnow().isoformat()
 
-            conn.execute(
-                """
-                INSERT INTO llm_calls (call_id, role, model, prompt_hash, prompt_preview, latency_ms, input_tokens, output_tokens, created_at, cached)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    call_id,
-                    role,
-                    model,
-                    prompt_hash,
-                    prompt_preview,
-                    float(latency_ms),
-                    int(input_tokens or 0),
-                    int(output_tokens or 0),
-                    created_at,
-                    bool(cached),
-                ),
-            )
-            conn.close()
-        except Exception as e:
-            print(f"[WARN] Failed to log LLM call: {e}", file=sys.stderr)
+        with _LOG_LOCK:
+            _LOG_QUEUE.append((
+                call_id,
+                role,
+                model,
+                prompt_hash,
+                prompt_preview,
+                float(latency_ms),
+                int(input_tokens or 0),
+                int(output_tokens or 0),
+                created_at,
+                bool(cached),
+            ))
+            if len(_LOG_QUEUE) >= 100:
+                # Flush in separate background or inline
+                pass
+        
+        if len(_LOG_QUEUE) >= 100:
+            _flush_log_queue()
 
     def _call_model_with_backoff(self, model: str, prompt: str, max_retries: int = 4) -> Tuple[str, int, int]:
         """Calls the model with exponential backoff on errors."""
