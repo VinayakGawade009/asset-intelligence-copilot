@@ -4,3 +4,24 @@ prototype/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# Backend runtime data & cache (DuckDB and LLM responses)
+backend/data/
+
+# Node / Frontend build
+node_modules/
+dist/
+build/
