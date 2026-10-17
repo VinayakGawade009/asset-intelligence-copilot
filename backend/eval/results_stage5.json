@@ -1,0 +1,66 @@
+{
+  "PART_1": [
+    {
+      "id": "Q11",
+      "status": "PASS",
+      "calls": 2,
+      "latency": 76.07,
+      "reason": "OK"
+    },
+    {
+      "id": "Q16",
+      "status": "PASS",
+      "calls": 2,
+      "latency": 13.62,
+      "reason": "OK"
+    }
+  ],
+  "PART_2": [
+    {
+      "id": "Q12",
+      "status": "PASS",
+      "calls": 3,
+      "latency": 45.62,
+      "reason": "OK"
+    },
+    {
+      "id": "Q13",
+      "status": "PASS",
+      "calls": 0,
+      "latency": 0.38,
+      "reason": "OK"
+    },
+    {
+      "id": "Q15",
+      "status": "PASS",
+      "calls": 5,
+      "latency": 61.65,
+      "reason": "OK"
+    }
+  ],
+  "PART_3": [
+    {
+      "id": "Q14",
+      "status": "PASS",
+      "calls": 4,
+      "latency": 45.89,
+      "reason": "OK"
+    }
+  ],
+  "PART_4": [
+    {
+      "id": "Q17",
+      "status": "PASS",
+      "calls": 0,
+      "latency": 1.11,
+      "reason": "OK"
+    },
+    {
+      "id": "Q18",
+      "status": "PASS",
+      "calls": 0,
+      "latency": 0.1,
+      "reason": "OK"
+    }
+  ]
+}

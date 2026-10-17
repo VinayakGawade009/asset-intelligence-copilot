@@ -38,6 +38,15 @@ from backend.app.schemas.chat import (
     ChatMeta,
     ChatResponse,
 )
+from backend.app.agent.memory import (
+    record_chat_turn_entities,
+    handle_private_memory_query,
+    handle_shared_fact_statement,
+    handle_correction_statement,
+    handle_rule_override_statement,
+    handle_user_claim_or_conflict,
+    handle_competing_analysis_query,
+)
 
 # Declarations of native function tools for Gemma
 
@@ -204,6 +213,43 @@ class AgentRunner:
         selected_args: Dict[str, Any] = {}
 
         # -------------------------------------------------------------
+        # STAGE 5: Memory, Shared Facts, Corrections, Rules, Conflicts
+        # -------------------------------------------------------------
+        c_mem = get_connection(read_only=False)
+        try:
+            m_resp = handle_private_memory_query(c_mem, user_id, chat_id, user_message, self.model)
+            if m_resp:
+                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
+                return m_resp
+
+            m_resp = handle_shared_fact_statement(c_mem, user_id, chat_id, user_message, self.model, self.gemma_wrapper)
+            if m_resp:
+                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
+                return m_resp
+
+            m_resp = handle_correction_statement(c_mem, user_id, chat_id, user_message, self.model, self.gemma_wrapper)
+            if m_resp:
+                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
+                return m_resp
+
+            m_resp = handle_rule_override_statement(c_mem, user_id, chat_id, user_message, self.model, self.gemma_wrapper)
+            if m_resp:
+                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
+                return m_resp
+
+            m_resp = handle_user_claim_or_conflict(c_mem, user_id, chat_id, user_message, self.model, self.gemma_wrapper)
+            if m_resp:
+                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
+                return m_resp
+
+            m_resp = handle_competing_analysis_query(c_mem, chat_id, user_message, self.model, self.gemma_wrapper)
+            if m_resp:
+                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
+                return m_resp
+        finally:
+            c_mem.close()
+
+        # -------------------------------------------------------------
         # STEP 1: Tool Selection with Native Function Calling (agent_planner)
         # -------------------------------------------------------------
         planner_prompt = (
@@ -315,6 +361,18 @@ class AgentRunner:
             a_latency = (time.time() - a_start) * 1000
             answer_text = resp2.text.strip() if resp2.text else tool_result.summary_text
 
+            # If tool summary has an omission/correction note not captured in the answer, preserve it
+            if "no longer listed" in tool_result.summary_text and "no longer listed" not in answer_text.lower():
+                notes = [s.strip() for s in tool_result.summary_text.split(".") if "no longer listed" in s]
+                if notes:
+                    answer_text += " " + ". ".join(notes) + "."
+
+            # If tool summary has a rule override note not captured in the answer, preserve it
+            if "not the manual" in tool_result.summary_text.lower() and "not the manual" not in answer_text.lower():
+                notes = [s.strip() for s in tool_result.summary_text.split(".") if "not the manual" in s.lower()]
+                if notes:
+                    answer_text += " " + ". ".join(notes) + "."
+
             if hasattr(resp2, "usage_metadata") and resp2.usage_metadata:
                 in_tok2 = getattr(resp2.usage_metadata, "prompt_token_count", 0) or 0
                 out_tok2 = getattr(resp2.usage_metadata, "candidates_token_count", 0) or 0
@@ -354,7 +412,7 @@ class AgentRunner:
             for f in tool_result.flags
         ]
 
-        return ChatResponse(
+        final_resp = ChatResponse(
             chat_id=chat_id,
             answer=answer_text,
             visual=tool_result.visual,
@@ -366,3 +424,11 @@ class AgentRunner:
                 tool_calls=tool_calls_executed,
             ),
         )
+
+        c_rec = get_connection(read_only=False)
+        try:
+            record_chat_turn_entities(c_rec, chat_id, user_id, user_message, final_resp)
+        finally:
+            c_rec.close()
+
+        return final_resp

@@ -59,13 +59,17 @@ def create_derived_views(conn: duckdb.DuckDBPyConnection):
         i.inspector_user_id,
         u.name as inspector_name,
         i.method,
-        i.wellhead_temp_c,
+        i.wellhead_temp_c as raw_wellhead_temp_c,
+        COALESCE(corr.new_value, i.wellhead_temp_c) as wellhead_temp_c,
+        corr.author_name as corrected_by_author,
+        corr.original_value as corrected_from_value,
+        corr.reason as correction_reason,
         i.ambient_temp_c,
-        (i.wellhead_temp_c - i.ambient_temp_c) as temp_delta_c,
+        (COALESCE(corr.new_value, i.wellhead_temp_c) - i.ambient_temp_c) as temp_delta_c,
         wr.producing_temp_delta as temp_delta_threshold,
         CASE
-            WHEN i.wellhead_temp_c IS NULL OR i.ambient_temp_c IS NULL THEN false
-            WHEN (i.wellhead_temp_c - i.ambient_temp_c) >= wr.producing_temp_delta THEN true
+            WHEN COALESCE(corr.new_value, i.wellhead_temp_c) IS NULL OR i.ambient_temp_c IS NULL THEN false
+            WHEN (COALESCE(corr.new_value, i.wellhead_temp_c) - i.ambient_temp_c) >= wr.producing_temp_delta THEN true
             ELSE false
         END as is_producing_oil,
         i.notes as inspection_notes
@@ -73,7 +77,10 @@ def create_derived_views(conn: duckdb.DuckDBPyConnection):
     JOIN wells w ON i.asset_id = w.asset_id
     JOIN areas a ON w.area_id = a.area_id
     LEFT JOIN users u ON i.inspector_user_id = u.user_id
-    JOIN v_well_rules wr ON w.asset_id = wr.asset_id;
+    JOIN v_well_rules wr ON w.asset_id = wr.asset_id
+    LEFT JOIN corrections corr
+        ON corr.target_record = i.inspection_id
+        AND corr.field_name = 'wellhead_temp_c';
     """)
 
     # 3. Effective spill detection and classification view:
@@ -108,25 +115,28 @@ def create_derived_views(conn: duckdb.DuckDBPyConnection):
         i.spill_area_pct,
         cn.note_id as correction_note_id,
         cn.text as correction_text,
+        corr.author_name as corrected_by_author,
+        corr.original_value as corrected_from_value,
+        corr.reason as correction_reason,
         CASE
             WHEN cn.note_id IS NOT NULL THEN false
             ELSE i.spill_detected
         END as effective_spill_detected,
         CASE
             WHEN cn.note_id IS NOT NULL OR NOT i.spill_detected THEN 0.0
-            ELSE COALESCE(i.spill_est_volume_bbl, 0.0)
+            ELSE COALESCE(corr.new_value, i.spill_est_volume_bbl, 0.0)
         END as effective_volume_bbl,
         CASE
             WHEN cn.note_id IS NOT NULL OR NOT i.spill_detected THEN 'none'
-            WHEN i.spill_est_volume_bbl >= sr.major_threshold THEN 'major'
-            WHEN i.spill_est_volume_bbl >= sr.reportable_threshold THEN 'reportable'
-            WHEN i.spill_est_volume_bbl >= sr.moderate_min THEN 'moderate'
-            WHEN i.spill_est_volume_bbl < sr.minor_max THEN 'minor'
+            WHEN COALESCE(corr.new_value, i.spill_est_volume_bbl, 0.0) >= sr.major_threshold THEN 'major'
+            WHEN COALESCE(corr.new_value, i.spill_est_volume_bbl, 0.0) >= sr.reportable_threshold THEN 'reportable'
+            WHEN COALESCE(corr.new_value, i.spill_est_volume_bbl, 0.0) >= sr.moderate_min THEN 'moderate'
+            WHEN COALESCE(corr.new_value, i.spill_est_volume_bbl, 0.0) < sr.minor_max THEN 'minor'
             ELSE 'minor'
         END as spill_class,
         CASE
             WHEN cn.note_id IS NOT NULL OR NOT i.spill_detected THEN false
-            WHEN i.spill_est_volume_bbl >= sr.reportable_threshold THEN true
+            WHEN COALESCE(corr.new_value, i.spill_est_volume_bbl, 0.0) >= sr.reportable_threshold THEN true
             ELSE false
         END as is_reportable
     FROM inspections i
@@ -135,6 +145,9 @@ def create_derived_views(conn: duckdb.DuckDBPyConnection):
     LEFT JOIN context_notes cn
         ON i.inspection_id = cn.inspection_id
         AND cn.note_type = 'correction'
+    LEFT JOIN corrections corr
+        ON corr.target_record = i.inspection_id
+        AND corr.field_name = 'spill_est_volume_bbl'
     CROSS JOIN v_spill_rules sr;
     """)
 

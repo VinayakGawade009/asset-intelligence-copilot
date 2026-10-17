@@ -191,6 +191,43 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     response_json VARCHAR,
     created_at TIMESTAMP
 );
+
+-- Shared team facts across users
+CREATE TABLE IF NOT EXISTS shared_facts (
+    fact_id VARCHAR PRIMARY KEY,
+    scope VARCHAR, -- 'well', 'well_type', 'area', 'fleet'
+    target_id VARCHAR, -- e.g. 'WELL-0007', 'T350'
+    text VARCHAR NOT NULL,
+    author_user_id VARCHAR NOT NULL,
+    author_name VARCHAR NOT NULL,
+    status VARCHAR DEFAULT 'confirmed', -- 'confirmed', 'unconfirmed'
+    created_at TIMESTAMP
+);
+
+-- Entities mentioned per chat turn for private user memory
+CREATE TABLE IF NOT EXISTS chat_entities (
+    entity_record_id VARCHAR PRIMARY KEY,
+    chat_id VARCHAR NOT NULL,
+    user_id VARCHAR NOT NULL,
+    entity_type VARCHAR NOT NULL, -- 'well', 'area'
+    entity_id VARCHAR NOT NULL,
+    created_at TIMESTAMP
+);
+
+-- Data and analysis corrections overlay
+CREATE TABLE IF NOT EXISTS corrections (
+    correction_id VARCHAR PRIMARY KEY,
+    target_table VARCHAR, -- 'inspections'
+    target_record VARCHAR, -- inspection_id e.g. 'INS-0164-0205'
+    field_name VARCHAR, -- 'wellhead_temp_c', 'spill_est_volume_bbl'
+    original_value DOUBLE,
+    new_value DOUBLE,
+    author_user_id VARCHAR,
+    author_name VARCHAR,
+    reason VARCHAR,
+    scope VARCHAR DEFAULT 'fleet',
+    created_at TIMESTAMP
+);
 """
 
 def init_db(conn):

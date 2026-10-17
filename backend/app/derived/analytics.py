@@ -193,7 +193,9 @@ def spills_query(
         w.lon as longitude,
         m.maintenance_id,
         rf.containment_hours,
-        rf.evidence_quote
+        rf.evidence_quote,
+        s.corrected_by_author,
+        s.corrected_from_value
     FROM v_effective_spills s
     JOIN wells w ON s.asset_id = w.asset_id
     LEFT JOIN maintenance m ON s.inspection_id = m.triggered_by_inspection_id
@@ -225,6 +227,8 @@ def spills_query(
             "maintenance_id": r[14],
             "containment_hours": r[15],
             "evidence_quote": r[16],
+            "corrected_by_author": r[17],
+            "corrected_from_value": r[18],
         }
         for r in rows
     ]
