@@ -78,9 +78,9 @@ export default function App() {
     getUsers()
       .then(us => {
         setUsers(us)
-        // Default to Michael Turner (U-201)
-        const mt = us.find(u => u.user_id === 'U-201') ?? us[0]
-        setCurrentUser(mt)
+        // Default to first user in list
+        const defaultUser = us[0] ?? null
+        setCurrentUser(defaultUser)
       })
       .catch(err => {
         console.error('Failed to load users:', err)

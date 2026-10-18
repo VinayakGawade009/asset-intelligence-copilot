@@ -51,20 +51,18 @@ export function toneClass(tone) {
   return map[tone] ?? 'neutral'
 }
 
-// Get today string from VITE_TODAY env or default
+// Get today string from VITE_TODAY env or dynamic date
 export function getToday() {
-  return import.meta.env.VITE_TODAY ?? '17 Oct 2026'
+  return import.meta.env.VITE_TODAY ?? new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-// Pinned users (shown at top of user picker)
-export const PINNED_USER_IDS = ['U-201', 'U-204', 'U-202', 'U-102', 'U-401']
+// Pinned users (shown at top of user picker if configured)
+export const PINNED_USER_IDS = []
 
 // Example queries for empty state
 export const EXAMPLE_QUERIES = [
-  { label: 'Q1 Status', text: 'Is WELL-0001 producing oil right now? Show me its current operational status card.' },
-  { label: 'Q2 Table', text: 'Which wells in Northeast Block 7 are not producing? Show a table.' },
-  { label: 'Q3 Line Chart', text: 'Show me the wellhead temperature trend for WELL-0001 over the last 6 months.' },
-  { label: 'Q6 Bar Chart', text: 'Which wells in Northeast Block 7 had the most downtime in the last 12 months?' },
-  { label: 'Q7 Map', text: 'Show me a map of all spills in the last 3 months.' },
-  { label: 'Q8 Heatmap', text: 'Show a heatmap of 2026 spills by geographic area and month.' },
+  { label: 'Area Status', text: 'Which wells in Northeast Block 8 are not producing oil right now, and why? Show them in a table.' },
+  { label: 'Downtime Ranking', text: 'Which 3 wells in Northeast Block 7 had the most downtime in the last 4 months? Show a bar chart.' },
+  { label: 'Spills Map', text: 'Show on a map every well in Northeast Block 8 with a real spill in the last 90 days.' },
+  { label: 'Spills Heatmap', text: 'Show a heatmap of spills by geographic area and month.' },
 ]

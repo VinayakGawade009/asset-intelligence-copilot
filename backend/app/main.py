@@ -66,7 +66,7 @@ def get_users():
 
 @app.get("/api/chats", response_model=List[ChatSession])
 def get_chats(user_id: Optional[str] = Query(None)):
-    """GET /api/chats?user_id=U-201 -> [{chat_id, title, updated_at}]"""
+    """GET /api/chats?user_id=<user_id> -> [{chat_id, title, updated_at}]"""
     conn = get_connection(read_only=True)
     if user_id:
         rows = conn.execute("""

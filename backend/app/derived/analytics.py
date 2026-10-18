@@ -301,7 +301,7 @@ def well_timeseries(
 def repairs_cost(
     conn: duckdb.DuckDBPyConnection,
     wells: List[str],
-    year: int = 2026,
+    year: Optional[int] = None,
 ) -> Dict[str, float]:
     """
     Calculates total repair cost for each well in the specified year.
@@ -309,6 +309,8 @@ def repairs_cost(
     """
     if not wells:
         return {}
+
+    target_year = year if year is not None else get_today().year
 
     placeholders = ", ".join(["?"] * len(wells))
     query = f"""
@@ -320,7 +322,7 @@ def repairs_cost(
       AND strftime(started_at, '%Y') = ?
     GROUP BY asset_id
     """
-    params = list(wells) + [str(year)]
+    params = list(wells) + [str(target_year)]
     rows = conn.execute(query, params).fetchall()
     cost_map = {w: 0.0 for w in wells}
     for asset_id, cost in rows:

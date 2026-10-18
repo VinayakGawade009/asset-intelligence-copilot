@@ -81,10 +81,10 @@ def resolve_well_id(input_str: Optional[str], conn: duckdb.DuckDBPyConnection) -
     return row[0] if row else None
 
 
-def resolve_area_name(input_str: Optional[str], conn: duckdb.DuckDBPyConnection) -> str:
+def resolve_area_name(input_str: Optional[str], conn: duckdb.DuckDBPyConnection) -> Optional[str]:
     """Resolves fuzzy area input to canonical area name (e.g. 'Northeast Block 8')."""
     if not input_str:
-        return "Northeast Block 7"
+        return None
     s = str(input_str).strip().lower()
 
     if "sw 24" in s or "southwest 24" in s or ("southwest" in s and "24" in s) or "block 24" in s:
@@ -102,7 +102,7 @@ def resolve_area_name(input_str: Optional[str], conn: duckdb.DuckDBPyConnection)
         if a_name.lower() in s or s in a_name.lower():
             return a_name
 
-    return "Northeast Block 7"
+    return None
 
 
 def determine_visual_type(
@@ -572,35 +572,44 @@ def tool_spills_query(
     """Queries oil spills with effective volume corrections and visual options."""
     vis_type = determine_visual_type(user_query, default_type="table", visual_hint=visual_hint)
 
-    # Special case: 2026 fleet heatmap
+    # Special case: fleet heatmap
     if vis_type == "heatmap" or "heatmap" in user_query.lower() or "by geographic area and month" in user_query.lower():
+        m_yr = re.search(r'\b(20\d\d)\b', user_query)
+        year_str = m_yr.group(1) if m_yr else str(get_today().year)
+
+        areas = [
+            "Southwest Block 23",
+            "Southwest Block 24",
+            "Northeast Block 7",
+            "Northeast Block 8",
+        ]
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"]
-        areas = ["Southwest Block 23", "Southwest Block 24", "Northeast Block 7", "Northeast Block 8"]
         heatmap_values = []
+        area_totals = {}
 
         for area in areas:
             area_row = []
-            for m_idx in range(1, 11):
+            for m_idx in range(1, len(months) + 1):
                 cnt = conn.execute("""
                     SELECT COUNT(*)
                     FROM v_effective_spills
                     WHERE area_name = ?
                       AND effective_spill_detected = true
-                      AND strftime(inspected_date, '%Y') = '2026'
+                      AND strftime(inspected_date, '%Y') = ?
                       AND CAST(strftime(inspected_date, '%m') AS INT) = ?
-                """, [area, m_idx]).fetchone()[0]
+                """, [area, year_str, m_idx]).fetchone()[0]
                 area_row.append(cnt)
             heatmap_values.append(area_row)
+            area_totals[area] = sum(area_row)
 
-        # Citations for 2026 spills across areas
         top_spills = conn.execute("""
             SELECT inspection_id, asset_id, inspected_date, effective_volume_bbl
             FROM v_effective_spills
             WHERE effective_spill_detected = true
-              AND strftime(inspected_date, '%Y') = '2026'
+              AND strftime(inspected_date, '%Y') = ?
             ORDER BY inspected_date DESC
             LIMIT 10
-        """).fetchall()
+        """, [year_str]).fetchall()
         citations = [
             {
                 "id": r[0],
@@ -611,18 +620,15 @@ def tool_spills_query(
             for r in top_spills
         ]
 
-        summary_text = (
-            "Heatmap of 2026 spills by area: "
-            "Southwest Block 23 (35 total), Southwest Block 24 (43 total), "
-            "Northeast Block 7 (37 total), Northeast Block 8 (26 total)."
-        )
+        totals_summary = ", ".join([f"{a} ({area_totals[a]} total)" for a in areas])
+        summary_text = f"Heatmap of {year_str} spills by area: {totals_summary}."
         return ToolResult(
             tool_name="spills_query",
             summary_text=summary_text,
             citations=citations,
             visual={
                 "type": "heatmap",
-                "title": "2026 Spills by Geographic Area and Month",
+                "title": f"{year_str} Spills by Geographic Area and Month",
                 "rows": areas,
                 "cols": months,
                 "values": heatmap_values,
@@ -631,15 +637,26 @@ def tool_spills_query(
         )
 
     # General spills query
-    # Check if target is area or well
     wid = resolve_well_id(target, conn)
     canonical_target = wid if wid else resolve_area_name(target, conn)
+    if not canonical_target:
+        if str(target).lower() == "fleet":
+            canonical_target = "fleet"
+        else:
+            return ToolResult(
+                tool_name="spills_query",
+                summary_text=f"Target '{target}' could not be resolved in the database.",
+                citations=[],
+                flags=[],
+                visual=None,
+            )
 
     spills = derived_spills_query(conn, target=canonical_target, window=window, min_volume=min_volume)
+    rep_thresh = get_rule_threshold(conn, "spill_volume_reportable_threshold", "fleet") or 5.0
 
     is_reportable_query = ("report" in user_query.lower() and "regulator" in user_query.lower()) or "reportable" in user_query.lower()
     if is_reportable_query:
-        spills = [s for s in spills if s.get("is_reportable") or s["effective_volume_bbl"] >= 5.0]
+        spills = [s for s in spills if s.get("is_reportable") or s["effective_volume_bbl"] >= rep_thresh]
 
     citations = []
     flags = []
@@ -669,7 +686,7 @@ def tool_spills_query(
                 "text": f"Spill volume corrected to {s['effective_volume_bbl']:.1f} bbl by {s['corrected_by_author']} (original AI estimate: {s.get('corrected_from_value', 4.5):.1f} bbl).",
                 "source_ids": [s["inspection_id"]],
             })
-        if s["effective_volume_bbl"] >= 5.0:
+        if s["effective_volume_bbl"] >= rep_thresh:
             reg_notice = conn.execute("""
                 SELECT event_id FROM regulatory_events
                 WHERE asset_id = ? AND related_inspection_id = ?
@@ -684,11 +701,18 @@ def tool_spills_query(
     # Summary
     total_bbl = sum(s["effective_volume_bbl"] for s in spills)
     if is_reportable_query:
-        well_names_str = ", ".join([s["well_id"] for s in spills]) or "no wells"
+        well_names_str = ", ".join(sorted(set(s["well_id"] for s in spills))) or "no wells"
+        corr_notes = []
+        for s in spills:
+            if s.get("corrected_by_author"):
+                corr_notes.append(
+                    f"{s['well_id']} had a spill corrected to {s['effective_volume_bbl']:.1f} bbl (above the {rep_thresh:.1f} bbl reportable threshold)."
+                )
+        corr_summary = " ".join(corr_notes)
         summary_text = (
             f"In {canonical_target} in the {window}, {well_names_str} needed a report to the regulator. "
-            f"WELL-0151 had a spill corrected to 5.4 bbl (above the 5.0 bbl reportable threshold). "
-            f"No written notice is on record, so it is flagged as overdue. No other spill in that period reached 5 bbl."
+            f"{corr_summary} "
+            f"No written notice is on record, so it is flagged as overdue. No other spill in that period reached {rep_thresh:.1f} bbl."
         )
     else:
         summary_text = (
@@ -710,7 +734,7 @@ def tool_spills_query(
                     "lat": round(lat, 5),
                     "lon": round(lon, 5),
                     "detail": f"{s['effective_volume_bbl']} bbl, {s['inspected_date'].strftime('%d %b %Y')}",
-                    "tone": "critical" if s["effective_volume_bbl"] >= 5.0 else "warning",
+                    "tone": "critical" if s["effective_volume_bbl"] >= rep_thresh else "warning",
                 })
         c_lat = sum(lats) / len(lats) if lats else 32.15
         c_lon = sum(lons) / len(lons) if lons else -102.16
@@ -1026,11 +1050,13 @@ def tool_uncontained_spills_query(
 def tool_repairs_cost(
     conn: duckdb.DuckDBPyConnection,
     wells: Union[List[str], str],
-    year: int = 2026,
+    year: Optional[int] = None,
     user_query: str = "",
     visual_hint: Optional[str] = None,
 ) -> ToolResult:
     """Calculates repair costs for specified wells in a given year."""
+    target_year = year if year is not None else get_today().year
+
     if isinstance(wells, str):
         well_list = [w.strip() for w in wells.split(",")]
     else:
@@ -1039,10 +1065,10 @@ def tool_repairs_cost(
     resolved_wells = [resolve_well_id(w, conn) for w in well_list]
     resolved_wells = [w for w in resolved_wells if w]
 
-    costs = derived_repairs_cost(conn, resolved_wells, year=year)
+    costs = derived_repairs_cost(conn, resolved_wells, year=target_year)
 
     summary_text = (
-        f"Repair costs in {year}: " +
+        f"Repair costs in {target_year}: " +
         ", ".join([f"{w}: USD {costs.get(w, 0.0):,.0f}" for w in resolved_wells]) + "."
     )
 
@@ -1051,7 +1077,7 @@ def tool_repairs_cost(
     if vis_type == "bar_chart":
         visual = {
             "type": "bar_chart",
-            "title": f"Repair Costs {year}",
+            "title": f"Repair Costs {target_year}",
             "categories": resolved_wells,
             "unit": "USD",
             "series": [{"name": "Cost", "values": [int(costs.get(w, 0.0)) for w in resolved_wells]}],

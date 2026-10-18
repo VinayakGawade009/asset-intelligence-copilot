@@ -12,7 +12,7 @@ import duckdb
 from google import genai
 from google.genai import types
 
-from backend.app.config import GOOGLE_API_KEY, GEMMA_MODEL_FAST
+from backend.app.config import GOOGLE_API_KEY, GEMMA_MODEL_FAST, GEMMA_MODEL_STRONG, TODAY
 from backend.app.db.connection import get_connection
 from backend.app.agent.llm import GemmaClient
 from backend.app.agent.tools import (
@@ -40,12 +40,7 @@ from backend.app.schemas.chat import (
 )
 from backend.app.agent.memory import (
     record_chat_turn_entities,
-    handle_private_memory_query,
-    handle_shared_fact_statement,
-    handle_correction_statement,
-    handle_rule_override_statement,
-    handle_user_claim_or_conflict,
-    handle_competing_analysis_query,
+    handle_memory_extraction_turn,
 )
 
 # Declarations of native function tools for Gemma
@@ -78,7 +73,7 @@ def uncontained_spills_query(area_name: str, window: str = "last 90 days", visua
     """Find spills in an area that were not contained within the SOP containment time limit."""
     return "ok"
 
-def repairs_cost(wells: List[str], year: int = 2026, visual_hint: Optional[str] = None) -> str:
+def repairs_cost(wells: List[str], year: Optional[int] = None, visual_hint: Optional[str] = None) -> str:
     """Calculate total repair costs for a list of wells in a given year."""
     return "ok"
 
@@ -110,7 +105,7 @@ TOOL_DECLARATIONS = [
 
 
 class AgentRunner:
-    """Orchestrates the 2-step agent loop: (1) native tool selection, (2) grounded answer generation."""
+    """Orchestrates the agent loop: tool selection, retry with strong model, and grounded answer generation."""
 
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.api_key = api_key or GOOGLE_API_KEY
@@ -148,113 +143,15 @@ class AgentRunner:
         else:
             return tool_search_documents(conn, query=user_query, user_query=user_query)
 
-    def _fallback_tool_selection(self, conn: duckdb.DuckDBPyConnection, user_query: str) -> Tuple[str, Dict[str, Any]]:
-        """Determines best tool via intent matching if Gemma does not emit a function call."""
-        q = user_query.lower()
-
-        # Heatmap / area spills
-        if "heatmap" in q:
-            return "spills_query", {"target": "fleet", "window": "2026", "visual_hint": "heatmap"}
-
-        # Uncontained spills
-        if ("not contained" in q or "containment" in q) and "spill" in q:
-            area = resolve_area_name(user_query, conn)
-            return "uncontained_spills_query", {"area_name": area, "window": "last 90 days"}
-
-        # Spills query map/table
-        if "spill" in q or "spills" in q:
-            wid = resolve_well_id(user_query, conn)
-            target = wid if wid else resolve_area_name(user_query, conn)
-            win = "last 4 years" if "4 year" in q else "last 90 days"
-            vis = "map" if "map" in q else "table"
-            return "spills_query", {"target": target, "window": win, "visual_hint": vis}
-
-        # Downtime ranking
-        if "downtime" in q or "down" in q:
-            wid = resolve_well_id(user_query, conn)
-            target = wid if wid else resolve_area_name(user_query, conn)
-            win = "2025" if "2025" in q else "last 4 months"
-            vis = "bar_chart" if "bar chart" in q or "chart" in q else None
-            return "downtime_ranking", {"target": target, "window": win, "visual_hint": vis}
-
-        # Breaches
-        if "breach" in q or "rule" in q or "broken" in q or "fine" in q:
-            wid = resolve_well_id(user_query, conn) or "WELL-0001"
-            return "breaches_check", {"well_id": wid, "window": "last 12 months"}
-
-        # Timeseries
-        if "timeseries" in q or "temperature" in q or "line chart" in q or "13 weeks" in q:
-            wid = resolve_well_id(user_query, conn) or "WELL-0001"
-            return "well_timeseries", {"well_id": wid, "weeks": 13, "visual_hint": "line_chart"}
-
-        # Area non-producing wells
-        if "not producing" in q and ("block" in q or "area" in q or "northeast" in q or "southwest" in q):
-            area = resolve_area_name(user_query, conn)
-            return "area_wells_not_producing", {"area_name": area, "visual_hint": "table"}
-
-        # Single well status
-        wid = resolve_well_id(user_query, conn)
-        if wid:
-            return "well_status", {"well_id": wid, "visual_hint": "status_card"}
-
-        return "search_documents", {"query": user_query}
-
-    def process_query(
+    def _call_planner_model(
         self,
+        model_name: str,
         user_message: str,
-        user_id: str = "U-201",
-        chat_id: Optional[str] = None,
-    ) -> ChatResponse:
-        """Executes the 2-step agent loop and returns ChatResponse."""
-        t_start = time.time()
-        chat_id = chat_id or f"chat_{uuid.uuid4().hex[:10]}"
-        tool_calls_executed = []
-        selected_tool_name = ""
-        selected_args: Dict[str, Any] = {}
-
-        # -------------------------------------------------------------
-        # STAGE 5: Memory, Shared Facts, Corrections, Rules, Conflicts
-        # -------------------------------------------------------------
-        c_mem = get_connection(read_only=False)
-        try:
-            m_resp = handle_private_memory_query(c_mem, user_id, chat_id, user_message, self.model)
-            if m_resp:
-                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
-                return m_resp
-
-            m_resp = handle_shared_fact_statement(c_mem, user_id, chat_id, user_message, self.model, self.gemma_wrapper)
-            if m_resp:
-                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
-                return m_resp
-
-            m_resp = handle_correction_statement(c_mem, user_id, chat_id, user_message, self.model, self.gemma_wrapper)
-            if m_resp:
-                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
-                return m_resp
-
-            m_resp = handle_rule_override_statement(c_mem, user_id, chat_id, user_message, self.model, self.gemma_wrapper)
-            if m_resp:
-                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
-                return m_resp
-
-            m_resp = handle_user_claim_or_conflict(c_mem, user_id, chat_id, user_message, self.model, self.gemma_wrapper)
-            if m_resp:
-                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
-                return m_resp
-
-            m_resp = handle_competing_analysis_query(c_mem, chat_id, user_message, self.model, self.gemma_wrapper)
-            if m_resp:
-                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
-                return m_resp
-        finally:
-            c_mem.close()
-
-        # -------------------------------------------------------------
-        # STEP 1: Tool Selection with Native Function Calling (agent_planner)
-        # -------------------------------------------------------------
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Invokes Gemma model with native tool declarations and logs honest latency and token usage."""
         planner_prompt = (
             "You are the planner for the Asset Intelligence Copilot.\n"
-            "Today is 17 Oct 2026.\n"
+            f"Today is {TODAY}.\n"
             "Select the single best tool and supply its typed arguments to answer the question.\n"
             "Do not calculate numbers yourself. All facts and metrics are retrieved by the tools."
         )
@@ -262,10 +159,10 @@ class AgentRunner:
         p_start = time.time()
         in_tok, out_tok = 0, 0
         response = None
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 response = self.client.models.generate_content(
-                    model=self.model,
+                    model=model_name,
                     contents=f"{planner_prompt}\n\nQuestion: {user_message}",
                     config=types.GenerateContentConfig(
                         tools=TOOL_DECLARATIONS,
@@ -275,47 +172,103 @@ class AgentRunner:
                 break
             except Exception as e:
                 err_str = str(e).lower()
-                if any(k in err_str for k in ["429", "rate", "resource", "quota", "503"]) and attempt < 2:
-                    time.sleep(2.0 * (attempt + 1))
+                if any(k in err_str for k in ["429", "rate", "resource", "quota", "503"]) and attempt < 1:
+                    time.sleep(2.0)
                 else:
                     break
 
+        p_latency = (time.time() - p_start) * 1000
+        if response and hasattr(response, "usage_metadata") and response.usage_metadata:
+            in_tok = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
+            out_tok = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+
+        # Log honest call with real measured latency and real token counts
+        p_hash = self.gemma_wrapper._compute_prompt_hash(model_name, f"PLANNER::{user_message}")
+        self.gemma_wrapper._log_call(
+            role="agent_planner",
+            model=model_name,
+            prompt_hash=p_hash,
+            prompt=f"Question: {user_message}",
+            latency_ms=p_latency,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            cached=False,
+        )
+
         if response:
-            p_latency = (time.time() - p_start) * 1000
-            if hasattr(response, "usage_metadata") and response.usage_metadata:
-                in_tok = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-                out_tok = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
-
-            # Log Call 1 immediately with role 'agent_planner'
-            p_hash = self.gemma_wrapper._compute_prompt_hash(self.model, f"PLANNER::{user_message}")
-            self.gemma_wrapper._log_call(
-                role="agent_planner",
-                model=self.model,
-                prompt_hash=p_hash,
-                prompt=f"Question: {user_message}",
-                latency_ms=p_latency,
-                input_tokens=in_tok,
-                output_tokens=out_tok,
-                cached=False,
-            )
-
             function_calls = getattr(response, "function_calls", None)
             if function_calls:
                 for fc in function_calls:
                     f_name = fc.name
                     f_args = fc.args or {}
                     if any(t.__name__ == f_name for t in TOOL_DECLARATIONS):
-                        selected_tool_name = f_name
-                        selected_args = f_args
-                        break
+                        return f_name, f_args
 
-        # If model did not emit a tool call, use intent matcher
+        return "", {}
+
+    def process_query(
+        self,
+        user_message: str,
+        user_id: Optional[str] = None,
+        chat_id: Optional[str] = None,
+    ) -> ChatResponse:
+        """Executes the agent loop and returns ChatResponse."""
+        t_start = time.time()
+        chat_id = chat_id or f"chat_{uuid.uuid4().hex[:10]}"
+        tool_calls_executed = []
+
+        # If user_id is missing, look up first active user from DB
+        c_user = get_connection(read_only=True)
+        try:
+            if not user_id:
+                u_row = c_user.execute("SELECT user_id FROM users ORDER BY user_id ASC LIMIT 1").fetchone()
+                user_id = u_row[0] if u_row else "U-101"
+        finally:
+            c_user.close()
+
+        # -------------------------------------------------------------
+        # STAGE 7: Memory, Shared Facts, Corrections, Rules, Conflicts
+        # -------------------------------------------------------------
+        c_mem = get_connection(read_only=False)
+        try:
+            m_resp = handle_memory_extraction_turn(
+                conn=c_mem,
+                user_id=user_id,
+                chat_id=chat_id,
+                user_message=user_message,
+                model_name=self.model,
+                gemma_client=self.gemma_wrapper,
+            )
+            if m_resp:
+                record_chat_turn_entities(c_mem, chat_id, user_id, user_message, m_resp)
+                return m_resp
+        finally:
+            c_mem.close()
+
+        # -------------------------------------------------------------
+        # STEP 1: Tool Selection with Native Function Calling (agent_planner)
+        # -------------------------------------------------------------
+        selected_tool_name, selected_args = self._call_planner_model(self.model, user_message)
+
+        # If fast model returned no valid tool call, retry once with strong model
         if not selected_tool_name:
-            c = get_connection(read_only=True)
-            try:
-                selected_tool_name, selected_args = self._fallback_tool_selection(c, user_message)
-            finally:
-                c.close()
+            selected_tool_name, selected_args = self._call_planner_model(GEMMA_MODEL_STRONG, user_message)
+
+        # If still no valid tool call, answer asking clarifying question
+        if not selected_tool_name:
+            total_lat = int((time.time() - t_start) * 1000)
+            return ChatResponse(
+                chat_id=chat_id,
+                answer="I could not determine which records to look up. Could you clarify which well, area, or records you would like me to check?",
+                visual=None,
+                citations=[],
+                flags=[],
+                meta=ChatMeta(
+                    model=self.model,
+                    latency_ms=total_lat,
+                    tool_calls=[],
+                ),
+            )
 
         # Execute selected tool
         tool_calls_executed.append(selected_tool_name)
@@ -330,7 +283,7 @@ class AgentRunner:
         # -------------------------------------------------------------
         answer_prompt = (
             "You are the Asset Intelligence Copilot.\n"
-            "Today is 17 Oct 2026.\n"
+            f"Today is {TODAY}.\n"
             "Write a clear, concise, 2-5 sentence answer in markdown responding directly to the user's question, "
             "grounded strictly in the tool result below.\n"
             "State the facts, numbers, dates, IDs, and citation references directly from the tool result.\n"
@@ -343,7 +296,7 @@ class AgentRunner:
         in_tok2, out_tok2 = 0, 0
         answer_text = tool_result.summary_text
         resp2 = None
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 resp2 = self.client.models.generate_content(
                     model=self.model,
@@ -352,8 +305,8 @@ class AgentRunner:
                 break
             except Exception as e:
                 err_str = str(e).lower()
-                if any(k in err_str for k in ["429", "rate", "resource", "quota", "503"]) and attempt < 2:
-                    time.sleep(2.0 * (attempt + 1))
+                if any(k in err_str for k in ["429", "rate", "resource", "quota", "503"]) and attempt < 1:
+                    time.sleep(2.0)
                 else:
                     break
 
@@ -377,7 +330,7 @@ class AgentRunner:
                 in_tok2 = getattr(resp2.usage_metadata, "prompt_token_count", 0) or 0
                 out_tok2 = getattr(resp2.usage_metadata, "candidates_token_count", 0) or 0
 
-            # Log Call 2 immediately with role 'agent_answer'
+            # Log Call 2 honestly with real measured latency and real token counts
             a_hash = self.gemma_wrapper._compute_prompt_hash(self.model, f"ANSWER::{user_message}")
             self.gemma_wrapper._log_call(
                 role="agent_answer",

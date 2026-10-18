@@ -1,0 +1,324 @@
+[
+  {
+    "scenario": "Q11 Base: Discussed yesterday repair costs",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.36s",
+    "first_line": "For the three wells we discussed yesterday (WELL-0121, WELL-0138, WELL-0107), Re"
+  },
+  {
+    "scenario": "Q11 Paraphrase 1: What did repairs cost this year...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.26s",
+    "first_line": "For the three wells we discussed yesterday (WELL-0138, WELL-0121, WELL-0107), Re"
+  },
+  {
+    "scenario": "Q11 Paraphrase 2: Total repair costs in 2026 for 3 wells...",
+    "pass": false,
+    "calls": 3,
+    "latency": "90.85s",
+    "first_line": "I cannot provide the total repair costs for those three wells because I found no"
+  },
+  {
+    "scenario": "Q11 Paraphrase 3: How much spent on repairs this year...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.34s",
+    "first_line": "For the three wells we discussed yesterday (WELL-0107, WELL-0121, WELL-0138), Re"
+  },
+  {
+    "scenario": "Q11 Variant: Different user (U-101) & area (SW-24)",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.30s",
+    "first_line": "For the three wells we discussed yesterday (WELL-0061, WELL-0069, WELL-0084), Re"
+  },
+  {
+    "scenario": "Q12 Base: WELL-0164 temp correction 41.0 C",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.37s",
+    "first_line": "Correction recorded against inspection INS-0164-0205 by Michael Turner: wellhead"
+  },
+  {
+    "scenario": "Q12 Paraphrase 1: Handheld thermal gun was defective...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.38s",
+    "first_line": "Correction recorded against inspection INS-0164-0205 by Michael Turner: wellhead"
+  },
+  {
+    "scenario": "Q12 Paraphrase 2: Record correction for WELL-0164...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.30s",
+    "first_line": "Correction recorded against inspection INS-0164-0205 by Michael Turner: wellhead"
+  },
+  {
+    "scenario": "Q12 Paraphrase 3: Field re-measurement shows 41.0 C...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.36s",
+    "first_line": "Correction recorded against inspection INS-0164-0205 by Michael Turner: wellhead"
+  },
+  {
+    "scenario": "Q12 Variant: WELL-0170 temp correction 42.0 C",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.31s",
+    "first_line": "Correction recorded against inspection INS-0170-0206 by Michael Turner: wellhead"
+  },
+  {
+    "scenario": "Q13 Base: WELL-0151 spill volume 5.4 bbl",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.28s",
+    "first_line": "Correction recorded against inspection INS-0151-0201: spill volume updated from "
+  },
+  {
+    "scenario": "Q13 Paraphrase 1: Field team measured 5.4 bbl...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.26s",
+    "first_line": "Correction recorded against inspection INS-0151-0201: spill volume updated from "
+  },
+  {
+    "scenario": "Q13 Paraphrase 2: Update volume from 4.5 to 5.4 bbl...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.33s",
+    "first_line": "Correction recorded against inspection INS-0151-0201: spill volume updated from "
+  },
+  {
+    "scenario": "Q13 Paraphrase 3: Actual measured volume was 5.4 bbl...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.29s",
+    "first_line": "Correction recorded against inspection INS-0151-0201: spill volume updated from "
+  },
+  {
+    "scenario": "Q13 Variant: WELL-0175 spill volume 5.5 bbl",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.30s",
+    "first_line": "Correction recorded against inspection INS-0175-0193: spill volume updated from "
+  },
+  {
+    "scenario": "Q14 Base: T350 RCA rule override (2 repairs)",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.25s",
+    "first_line": "Recorded rule override for all T350 wells: root-cause analysis is now required a"
+  },
+  {
+    "scenario": "Q14 Base Part 2: Re-query wells with T350 override",
+    "pass": false,
+    "calls": 3,
+    "latency": "24.64s",
+    "first_line": "The wells in Northeast Block 7 requiring a root-cause analysis on their pump jac"
+  },
+  {
+    "scenario": "Q14 Paraphrase 1: Rule change for all T350 wells...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.30s",
+    "first_line": "Recorded rule override for all T350 wells: root-cause analysis is now required a"
+  },
+  {
+    "scenario": "Q14 Paraphrase 2: Policy update for T350 type wells...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.28s",
+    "first_line": "Recorded rule override for all T350 wells: root-cause analysis is now required a"
+  },
+  {
+    "scenario": "Q14 Paraphrase 3: Note for all T350 assets: threshold 2...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.25s",
+    "first_line": "Recorded rule override for all T350 wells: root-cause analysis is now required a"
+  },
+  {
+    "scenario": "Q14 Variant: T200 RCA rule override (2 repairs)",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.27s",
+    "first_line": "Recorded rule override for all T200 wells: root-cause analysis is now required a"
+  },
+  {
+    "scenario": "Q15 Base Part 1: Jessica Reed checks WELL-0164",
+    "pass": false,
+    "calls": 6,
+    "latency": "2.74s",
+    "first_line": "I could not determine which records to look up. Could you clarify which well, ar"
+  },
+  {
+    "scenario": "Q15 Base Part 2: Laura Simmons checks NE-08 reportable spills",
+    "pass": true,
+    "calls": 1,
+    "latency": "29.88s",
+    "first_line": "In Northeast Block 8 in the last 90 days, WELL-0151, WELL-0175 needed a report t"
+  },
+  {
+    "scenario": "Q15 Paraphrase 1: Check if WELL-0164 is producing...",
+    "pass": true,
+    "calls": 2,
+    "latency": "29.66s",
+    "first_line": "Yes, WELL-0164 is recorded as producing oil based on inspection INS-0164-0205 co"
+  },
+  {
+    "scenario": "Q15 Paraphrase 2: Operational status of WELL-0164...",
+    "pass": true,
+    "calls": 2,
+    "latency": "47.51s",
+    "first_line": "WELL-0164 is producing oil. Latest inspection INS-0164-0205 was conducted on 15 "
+  },
+  {
+    "scenario": "Q15 Paraphrase 3: List all reportable spills in NE-08...",
+    "pass": true,
+    "calls": 3,
+    "latency": "53.17s",
+    "first_line": "In Northeast Block 8 in the last 90 days, WELL-0151, WELL-0175 needed a report t"
+  },
+  {
+    "scenario": "Q15 Variant: Tyler Hughes checks corrected WELL-0170",
+    "pass": true,
+    "calls": 1,
+    "latency": "5.77s",
+    "first_line": "WELL-0170 is producing oil. Latest inspection INS-0170-0206 was conducted on 15 "
+  },
+  {
+    "scenario": "Q16 Base Part 1: Jake Morales shares shut-in FYI",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.26s",
+    "first_line": "Recorded shared note for WELL-0007 from Jake Morales: \"FYI for everyone: WELL-00"
+  },
+  {
+    "scenario": "Q16 Base Part 2: Turner sees shared downtime note",
+    "pass": true,
+    "calls": 3,
+    "latency": "26.93s",
+    "first_line": "Yes, WELL-0007 is scheduled for a 10-day planned workover shut-in starting 17 Oc"
+  },
+  {
+    "scenario": "Q16 Base Part 3: Jessica Reed private memory isolation",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.22s",
+    "first_line": "I have no record of an earlier conversation with you discussing these wells. Eac"
+  },
+  {
+    "scenario": "Q16 Paraphrase 1: Announcement for everyone...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.30s",
+    "first_line": "Recorded shared note for WELL-0007 from Jake Morales: \"Announcement for everyone"
+  },
+  {
+    "scenario": "Q16 Paraphrase 2: Scheduled shut-ins for WELL-0007...",
+    "pass": true,
+    "calls": 3,
+    "latency": "29.03s",
+    "first_line": "Yes, WELL-0007 has scheduled downtime. According to Jake Morales, the well is sc"
+  },
+  {
+    "scenario": "Q16 Paraphrase 3: Repair expenses from talk yesterday...",
+    "pass": false,
+    "calls": 1,
+    "latency": "92.98s",
+    "first_line": "Found 0 document sections matching '3 wells from our talk yesterday'."
+  },
+  {
+    "scenario": "Q16 Variant: WELL-0082 shared note & query across users",
+    "pass": true,
+    "calls": 3,
+    "latency": "34.40s",
+    "first_line": "Yes, WELL-0082 has planned downtime scheduled. According to notes from Tyler Hug"
+  },
+  {
+    "scenario": "Q17 Base Part 1: Tyler Hughes claims WELL-0175 running fine",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.41s",
+    "first_line": "According to the 2026-10-15 inspection by Jessica Reed, WELL-0175's wellhead tem"
+  },
+  {
+    "scenario": "Q17 Base Part 2: Jake Morales claims WELL-0001 back online",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.39s",
+    "first_line": "According to the 2026-10-15 inspection by Ryan Brooks, WELL-0001's wellhead temp"
+  },
+  {
+    "scenario": "Q17 Paraphrase 1: WELL-0175 operating normally...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.36s",
+    "first_line": "According to the 2026-10-15 inspection by Jessica Reed, WELL-0175's wellhead tem"
+  },
+  {
+    "scenario": "Q17 Paraphrase 2: WELL-0175 is up and pumping fine...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.37s",
+    "first_line": "According to the 2026-10-15 inspection by Jessica Reed, WELL-0175's wellhead tem"
+  },
+  {
+    "scenario": "Q17 Paraphrase 3: WELL-0001 resumed production...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.41s",
+    "first_line": "According to the 2026-10-15 inspection by Ryan Brooks, WELL-0001's wellhead temp"
+  },
+  {
+    "scenario": "Q17 Variant: Claim on WELL-0172 contradicts data",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.36s",
+    "first_line": "According to the 2026-10-15 inspection by Jessica Reed, WELL-0172's wellhead tem"
+  },
+  {
+    "scenario": "Q18 Base: WELL-0101 spill real oil competing notes",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.29s",
+    "first_line": "Yes, the 2026-08-20 spill at WELL-0101 was real crude oil. The automated system "
+  },
+  {
+    "scenario": "Q18 Paraphrase 1: Crude oil or produced water...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.33s",
+    "first_line": "Yes, the 2026-08-20 spill at WELL-0101 was real crude oil. The automated system "
+  },
+  {
+    "scenario": "Q18 Paraphrase 2: Confirmed as real oil...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.32s",
+    "first_line": "Yes, the 2026-08-20 spill at WELL-0101 was real crude oil. The automated system "
+  },
+  {
+    "scenario": "Q18 Paraphrase 3: Was spill event crude oil or water...",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.35s",
+    "first_line": "Yes, the 2026-08-20 spill at WELL-0101 was real crude oil. The automated system "
+  },
+  {
+    "scenario": "Q18 Variant: WELL-0001 7 Mar rainwater detection",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.31s",
+    "first_line": "No, the 2024-03-07 detection at WELL-0001 was not real oil. Although automated i"
+  },
+  {
+    "scenario": "Generalization Check: 20 random wells vs independent pandas (20/20 exact)",
+    "pass": true,
+    "calls": 0,
+    "latency": "0.15s",
+    "first_line": "All 20 random wells verified against raw JSONL: delta, status, thresholds, and 2026 repair costs match 100%."
+  }
+]

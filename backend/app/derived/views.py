@@ -78,9 +78,13 @@ def create_derived_views(conn: duckdb.DuckDBPyConnection):
     JOIN areas a ON w.area_id = a.area_id
     LEFT JOIN users u ON i.inspector_user_id = u.user_id
     JOIN v_well_rules wr ON w.asset_id = wr.asset_id
-    LEFT JOIN corrections corr
+    LEFT JOIN (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY target_record, field_name ORDER BY created_at DESC) as rn
+        FROM corrections
+    ) corr
         ON corr.target_record = i.inspection_id
-        AND corr.field_name = 'wellhead_temp_c';
+        AND corr.field_name = 'wellhead_temp_c'
+        AND corr.rn = 1;
     """)
 
     # 3. Effective spill detection and classification view:
@@ -145,9 +149,13 @@ def create_derived_views(conn: duckdb.DuckDBPyConnection):
     LEFT JOIN context_notes cn
         ON i.inspection_id = cn.inspection_id
         AND cn.note_type = 'correction'
-    LEFT JOIN corrections corr
+    LEFT JOIN (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY target_record, field_name ORDER BY created_at DESC) as rn
+        FROM corrections
+    ) corr
         ON corr.target_record = i.inspection_id
         AND corr.field_name = 'spill_est_volume_bbl'
+        AND corr.rn = 1
     CROSS JOIN v_spill_rules sr;
     """)
 
